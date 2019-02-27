@@ -9,7 +9,6 @@
 # ======================================================================================================================================================================= #
 # Import Section for Importing library.
 # ======================================================================================================================================================================= #
-
 import cv2 as cv
 import numpy as np
 import math
@@ -20,8 +19,6 @@ import sys
 # ======================================================================================================================================================================= #
 # Function Definitions:  Calculating the H matrix
 # ======================================================================================================================================================================= #
-
-
 def getHMatrix(orientation, camera_x, camera_y):
     # ================================================================================================================================================================ #
     # World coordinates - come from video.
@@ -78,8 +75,6 @@ def getHMatrix(orientation, camera_x, camera_y):
 # ======================================================================================================================================================================= #
 # Function Definitions:  get the orientation of the tag with respect to video frame
 # ======================================================================================================================================================================= #
-
-
 def getOrientation(input_image):
     org = {}
     lst = []
@@ -122,12 +117,38 @@ def getOrientation(input_image):
     org[tR] = 'tR'
     lst.append(tR)
     return org[max(lst)]
+# ======================================================================================================================================================================= #
+# Function Definitions:  get the tag ID
+# ======================================================================================================================================================================= #
+
+
+def getTagId(input_image, orientationID):
+    id = ''
+    if orientationID == 'tL':
+        keys = ['BL', 'BR', 'TR', 'TL']
+    elif orientationID == 'bL':
+        keys = ['TL', 'BL', 'BR', 'TR']
+    elif orientationID == 'bR':
+        keys = ['TR', 'TL', 'BL', 'BR']
+    elif orientationID == 'tR':
+        keys = ['BR', 'TR', 'TL', 'BL']
+    orientation = {'BL': [150, 200, 200, 250], 'BR': [200, 250, 200, 250], 'TR': [200, 250, 150, 200], 'TL': [150, 200, 150, 200], }
+    # loop through each orientation to find out the tag ID
+    sum = 0
+    for o in range(0, 4):
+        for i in range(orientation[keys[o]][0], orientation[keys[o]][1]):
+            for j in range(orientation[keys[o]][2], orientation[keys[o]][3]):
+                sum += input_image[i, j]
+        bL = sum/2500
+        if bL > 180:
+            id = id + '1'
+        else:
+            id = id + '0'
+    return id
 
 # ======================================================================================================================================================================= #
 # Function Definitions:  get the K,[R|t] matrices  of the tag with respect to video frame
 # ======================================================================================================================================================================= #
-
-
 def getKRTMatrix(H, inv_H):
     K_mat = np.array([[1406.08415449821, 0, 0], [2.20679787308599, 1417.99930662800, 0], [
                      1014.13643417416, 566.347754321696, 1]])
@@ -137,8 +158,7 @@ def getKRTMatrix(H, inv_H):
     b2 = B_mat[:, 1].reshape(3, 1)
     r3 = np.cross(B_mat[:, 0], B_mat[:, 1])
     b3 = B_mat[:, 2].reshape(3, 1)
-    scalar = 2/(np.linalg.norm(np.matmul(inv_K_mat, b1)) +
-                np.linalg.norm(np.matmul(inv_K_mat, b2)))
+    scalar = 2/(np.linalg.norm(np.matmul(inv_K_mat, b1)) + np.linalg.norm(np.matmul(inv_K_mat, b2)))
     t = scalar*b3
     r1 = scalar*b1
     r2 = scalar*b2
@@ -151,13 +171,12 @@ def getKRTMatrix(H, inv_H):
 # ==================================================================================================================================================================== #
 # Import Video files and required Image
 # ==================================================================================================================================================================== #
-
 tag = cv.VideoCapture('Data/Tag0.mp4')
 img = cv.imread('Data/Lena.png')
 img_grayscale = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 (img_x, img_y, ch) = img.shape
 ref_x_points, ref_y_points = 400, 400
-
+tag_id_found = False
 while True:
     # Reading each key frame ( kf_ ) from the video
     ret, key_frame = tag.read()
@@ -172,8 +191,7 @@ while True:
     rows, cols, chs = key_frame.shape
     kf_grayscale = cv.cvtColor(key_frame, cv.COLOR_BGR2GRAY)
     _, kf_threshold = cv.threshold(kf_grayscale, 200, 255, 0)
-    _, contours, heirarchy = cv.findContours(
-        kf_threshold, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    _, contours, heirarchy = cv.findContours(kf_threshold, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv.contourArea, reverse=True)
 
     # ================================================================================================================================================================ #
@@ -196,33 +214,32 @@ while True:
                 H_tag, inv_H_tag = getHMatrix('bR', ref_x_points, ref_y_points)
                 # ==================================================================================================================================================== #
                 # Computing Keyframe
-                tag_unwarpped = cv.warpPerspective(
-                    key_frame, H_tag, (ref_x_points, ref_y_points))
-                tag_unwarpped_grayscale = cv.cvtColor(
-                    tag_unwarpped, cv.COLOR_BGR2GRAY)
-                _, tag_unwarpped_threshold = cv.threshold(
-                    tag_unwarpped_grayscale, 200, 255, cv.THRESH_BINARY)
+                tag_unwarpped = cv.warpPerspective(key_frame, H_tag, (ref_x_points, ref_y_points))
+                tag_unwarpped_grayscale = cv.cvtColor(tag_unwarpped, cv.COLOR_BGR2GRAY)
+                _, tag_unwarpped_threshold = cv.threshold(tag_unwarpped_grayscale, 200, 255, cv.THRESH_BINARY)
                 # ==================================================================================================================================================== #
-                # Computing the orientation the tag using thresholded unwarpped tag image
+                # Computing the orientation of the tag using thresholded unwarpped tag image 
                 orientationID = getOrientation(tag_unwarpped_threshold)
                 font = cv.FONT_HERSHEY_SIMPLEX
-                cv.putText(key_frame, orientationID, (150, 150),
-                           font, 4, (0, 0, 225), 2, cv.LINE_AA)
+                # ==================================================================================================================================================== #
+                # Computing the tag ID of the thresholded unwarpped tag image (This is done only once)
+                # ==================================================================================================================================================== #
+                if tag_id_found == False:
+                    tag_id = getTagId(tag_unwarpped_threshold, orientationID)
+                    tag_id_found = True
+                tx1, ty1 = approx[0][0][0], approx[0][0][1]
+                cv.putText(kf_original, "Tag ID: " + tag_id, (tx1-50, ty1-50), font, 1, (0, 0, 225), 2, cv.LINE_AA)
                 # ==================================================================================================================================================== #
                 # Using the orientation information obtained above lets recalculate the H and inv_H matrices
                 H_image, inv_H_image = getHMatrix(orientationID, img_x, img_y)
                 # ==================================================================================================================================================== #
                 # Preparing the image and projecting into the tag using the recalculated Homography matrix
-                warpped_image = cv.warpPerspective(
-                    img, inv_H_image, (cols, rows))
-                warpped_image_grayscale = cv.cvtColor(
-                    warpped_image, cv.COLOR_BGR2GRAY)
+                warpped_image = cv.warpPerspective(img, inv_H_image, (cols, rows))
+                warpped_image_grayscale = cv.cvtColor(warpped_image, cv.COLOR_BGR2GRAY)
                 # ==================================================================================================================================================== #
                 # Creating Mask and merging the key frame with the warpped Image using bitwise_and and add opencv functions
-                _, warpped_image_threshold = cv.threshold(
-                    warpped_image_grayscale, 0, 250, cv.THRESH_BINARY_INV)
-                kf_slotted = cv.bitwise_and(
-                    kf_original, kf_original, mask=warpped_image_threshold)
+                _, warpped_image_threshold = cv.threshold(warpped_image_grayscale, 0, 250, cv.THRESH_BINARY_INV)
+                kf_slotted = cv.bitwise_and(kf_original, kf_original, mask=warpped_image_threshold)
                 result = cv.add(kf_slotted, warpped_image)
     # ================================================================================================================================================================ #
     # Display the Original Keyframe and Final Result
