@@ -150,15 +150,14 @@ def getTagId(input_image, orientationID):
 # Function Definitions:  get the K,[R|t] matrices  of the tag with respect to video frame
 # ======================================================================================================================================================================= #
 def getKRTMatrix(H, inv_H):
-    K_mat = np.array([[1406.08415449821, 0, 0], [2.20679787308599, 1417.99930662800, 0], [
-                     1014.13643417416, 566.347754321696, 1]])
+    K_mat = np.array([[1406.08415449821, 0, 0], [2.20679787308599, 1417.99930662800, 0], [1014.13643417416, 566.347754321696, 1]]).T
     inv_K_mat = np.linalg.inv(K_mat)
-    B_mat = np.matmul(inv_K_mat, H)
+    B_mat = np.matmul(inv_K_mat, inv_H)
     b1 = B_mat[:, 0].reshape(3, 1)
     b2 = B_mat[:, 1].reshape(3, 1)
     r3 = np.cross(B_mat[:, 0], B_mat[:, 1])
     b3 = B_mat[:, 2].reshape(3, 1)
-    scalar = 2/(np.linalg.norm(np.matmul(inv_K_mat, b1)) + np.linalg.norm(np.matmul(inv_K_mat, b2)))
+    scalar = 2/(np.linalg.norm(inv_K_mat.dot(b1))+np.linalg.norm(inv_K_mat.dot(b2)))
     t = scalar*b3
     r1 = scalar*b1
     r2 = scalar*b2
@@ -167,21 +166,33 @@ def getKRTMatrix(H, inv_H):
 
     return R_mat, t, K_mat
 
+# ======================================================================================================================================================================= #
+# Function Definitions:  Draw the 3D structure, having the borders of a cuboid
+# ======================================================================================================================================================================= #
+def draw3D(frame, threeDimPoints):
+
+    threeDimPoints = np.int32(threeDimPoints).reshape(-1, 2)
+    frame = cv.drawContours(frame, [threeDimPoints[:4]], -1, (0, 255, 0), 3)   # Ground plane
+    for i, j in zip(range(4), range(4, 8)):                                    # Z Axis planes
+        frame = cv.line(frame, tuple(threeDimPoints[i]), tuple(threeDimPoints[j]), (0, 0, 255), 3)
+    frame = cv.drawContours(frame, [threeDimPoints[4:]], -1, (255, 0, 0), 3)   # Top plane
+    return frame
 
 # ==================================================================================================================================================================== #
 # Import Video files and required Image
 # ==================================================================================================================================================================== #
-tag = cv.VideoCapture('Data/Tag0.mp4')
+tag = cv.VideoCapture('Data/Tag2.mp4')
 img = cv.imread('Data/Lena.png')
 img_grayscale = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 (img_x, img_y, ch) = img.shape
 ref_x_points, ref_y_points = 400, 400
 tag_id_found = False
+threeDimAxis = np.float32([[0, 0, 0], [0, 500, 0], [500, 500, 0], [500, 0, 0], [0, 0, -300], [0, 500, -300], [500, 500, -300], [500, 0, -300]])  # Change these values to
+# change the scaling of the 3D structure
 while True:
     # Reading each key frame ( kf_ ) from the video
     ret, key_frame = tag.read()
-    if ret == None or ret == False:
-        break
+    if ret == None or ret == False: break
     # ================================================================================================================================================================ #
     # For better Contouring converting each key frame into grayscale and apply thresholding.
     # ================================================================================================================================================================ #
@@ -192,8 +203,8 @@ while True:
     kf_grayscale = cv.cvtColor(key_frame, cv.COLOR_BGR2GRAY)
     _, kf_threshold = cv.threshold(kf_grayscale, 200, 255, 0)
     _, contours, heirarchy = cv.findContours(kf_threshold, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv.contourArea, reverse=True)
-
+    contours = sorted(contours, key=cv.contourArea, reverse=True)[2:5]
+    
     # ================================================================================================================================================================ #
     # shortlisting Contour candidates with area approximately equal to the Tag area among the multiple cntours detected.
     # ================================================================================================================================================================ #
@@ -204,7 +215,7 @@ while True:
         peri = cv.arcLength(contour, True)
         approx = cv.approxPolyDP(contour, 0.01 * peri, True)
         area = cv.contourArea(contour)
-        if area > 2000 and area < 25000 and area > cv.contourArea(max_area_contour):
+        if area > 2000 and area < 22000 and area > cv.contourArea(max_area_contour):
             max_area_contour = contour
             if len(approx) == 4:                            # Filtering Contours with 4 corners
                 # Draw the selected Contour matching the criteria fixed
@@ -241,10 +252,16 @@ while True:
                 _, warpped_image_threshold = cv.threshold(warpped_image_grayscale, 0, 250, cv.THRESH_BINARY_INV)
                 kf_slotted = cv.bitwise_and(kf_original, kf_original, mask=warpped_image_threshold)
                 result = cv.add(kf_slotted, warpped_image)
+                # ==================================================================================================================================================== #
+                # Computing the Projection Matrix for placing 3D objects
+                R_mat, t, K_mat = getKRTMatrix(H_image, inv_H_image)
+                threeDimPoints, jacobian = cv.projectPoints(threeDimAxis,R_mat,t,K_mat,np.zeros((1,4)))
+                threeDframe = draw3D(key_frame, threeDimPoints)
     # ================================================================================================================================================================ #
     # Display the Original Keyframe and Final Result
     cv.imshow("Original Key Frame", kf_original)
     cv.imshow("Result", result)
+    cv.imshow("3D Projection Cube", threeDframe)
     key = cv.waitKey(1)
     if key == 27:
         break
