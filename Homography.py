@@ -128,7 +128,7 @@ def getKRTMatrix(H,inv_H):
     b2 = B_mat[:, 1].reshape(3, 1)
     r3 = np.cross(B_mat[:, 0], B_mat[:, 1])
     b3 = B_mat[:, 2].reshape(3, 1)
-    scalar = 2/(np.linalg.norm(inv_K_mat).dot(b1)+np.linalg.norm(inv_K_mat).dot(b2))
+    scalar = 2/(np.linalg.norm(np.matmul(inv_K_mat, b1))+np.linalg.norm(np.matmul(inv_K_mat, b2)))
     t = scalar*b3
     r1 = scalar*b1
     r2 = scalar*b2
@@ -158,7 +158,8 @@ while True:
     rows, cols, chs = key_frame.shape                   # Extracting Video Frame Size
     kf_grayscale = cv.cvtColor(key_frame, cv.COLOR_BGR2GRAY)
     _, kf_threshold = cv.threshold(kf_grayscale, 200, 255, 0)
-    _, contours, _ = cv.findContours(kf_threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    _, contours, heirarchy = cv.findContours(kf_threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv.contourArea, reverse = True)
 
     # ================================================================================================================================================================ #
     # shortlisting Contour candidates with area approximately equal to the Tag area among the multiple cntours detected.
@@ -169,7 +170,7 @@ while True:
         peri = cv.arcLength(contour, True)
         approx = cv.approxPolyDP(contour, 0.01 * peri, True)
         area = cv.contourArea(contour)
-        if area < 28000 and area > cv.contourArea(max_area_contour):
+        if area > 2000 and area < 25000 and area > cv.contourArea(max_area_contour):
             max_area_contour = contour
             if len(approx) == 4:                            # Filtering Contours with 4 corners
                 # Draw the selected Contour matching the criteria fixed
