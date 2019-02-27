@@ -13,7 +13,7 @@
 import cv2 as cv
 import numpy as np
 import  math, copy
-import time,sys
+import time,sys, imutils
 
 # ======================================================================================================================================================================= #
 # Function Definitions:  Calculating the H matrix
@@ -142,7 +142,7 @@ def getKRTMatrix(H,inv_H):
 # Import Video files and required Image
 # ==================================================================================================================================================================== #
 
-tag = cv.VideoCapture('Data/Tag0.mp4')
+tag = cv.VideoCapture('Data/multipleTags.mp4')
 img = cv.imread('Data/Lena.png')
 img_grayscale = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
 (img_x, img_y, ch) = img.shape
@@ -158,52 +158,54 @@ while True:
     rows, cols, chs = key_frame.shape                   # Extracting Video Frame Size
     kf_grayscale = cv.cvtColor(key_frame, cv.COLOR_BGR2GRAY)
     _, kf_threshold = cv.threshold(kf_grayscale, 200, 255, 0)
-    _, contours, heirarchy = cv.findContours(kf_threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    _, contours, _ = cv.findContours(kf_threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv.contourArea, reverse = True)
-
     # ================================================================================================================================================================ #
     # shortlisting Contour candidates with area approximately equal to the Tag area among the multiple cntours detected.
     # ================================================================================================================================================================ #
-    max_area_contour = np.zeros((1, 1, 2), dtype=int)          # To keep track of contour with maximum area
-    
+    # checking whether the contours has four points
     for contour in contours:
         peri = cv.arcLength(contour, True)
         approx = cv.approxPolyDP(contour, 0.01 * peri, True)
         area = cv.contourArea(contour)
-        if area > 2000 and area < 25000 and area > cv.contourArea(max_area_contour):
-            max_area_contour = contour
-            if len(approx) == 4:                            # Filtering Contours with 4 corners
-                # Draw the selected Contour matching the criteria fixed
-                cv.drawContours(key_frame, [contour], 0, (0, 0, 225), 2)
-                # ==================================================================================================================================================== #
-                # Computing H matrix to project tag
-                H_tag, inv_H_tag = getHMatrix('bR', ref_x_points, ref_y_points)
-                # ==================================================================================================================================================== #
-                # Computing Keyframe 
-                tag_unwarpped = cv.warpPerspective(key_frame, H_tag, (ref_x_points, ref_y_points))
-                tag_unwarpped_grayscale = cv.cvtColor(tag_unwarpped, cv.COLOR_BGR2GRAY)
-                _, tag_unwarpped_threshold = cv.threshold(tag_unwarpped_grayscale, 200, 255, cv.THRESH_BINARY)
-                # ==================================================================================================================================================== #
-                # Computing the orientation the tag using thresholded unwarpped tag image
-                orientationID = getOrientation(tag_unwarpped_threshold)
-                font = cv.FONT_HERSHEY_SIMPLEX
-                cv.putText(key_frame, orientationID, (150,150), font, 4, (0, 0, 225), 2, cv.LINE_AA)
-                # ==================================================================================================================================================== #
-                # Using the orientation information obtained above lets recalculate the H and inv_H matrices 
-                H_image, inv_H_image = getHMatrix(orientationID, img_x, img_y)                
-                # ==================================================================================================================================================== #
-                # Preparing the image and projecting into the tag using the recalculated Homography matrix
-                warpped_image = cv.warpPerspective(img, inv_H_image, (cols, rows))
-                warpped_image_grayscale = cv.cvtColor(warpped_image, cv.COLOR_BGR2GRAY)
-                # ==================================================================================================================================================== #
-                # Creating Mask and merging the key frame with the warpped Image using bitwise_and and add opencv functions
-                _, warpped_image_threshold = cv.threshold(warpped_image_grayscale, 0, 250, cv.THRESH_BINARY_INV)
-                kf_slotted = cv.bitwise_and(kf_original, kf_original, mask=warpped_image_threshold)
-                result = cv.add(kf_slotted, warpped_image)
-    # ================================================================================================================================================================ #
-    # Display the Original Keyframe and Final Result 
-    cv.imshow("Original Key Frame", kf_original)
-    cv.imshow("Result", result)
+        if len(approx) == 4 and area<28000:   
+            corners = approx
+            break
+        elif len(approx) != 4:
+            corners = None
+
+    if corners is not None:                                # Filtering Contours with 4 corners
+        # Draw the selected Contour matching the criteria fixed
+        cv.drawContours(key_frame, [contour], 0, (0, 0, 225), 2)
+        # ==================================================================================================================================================== #
+        # Computing H matrix to project tag
+        H_tag, inv_H_tag = getHMatrix('bR', ref_x_points, ref_y_points)
+        # ==================================================================================================================================================== #
+        # Computing Keyframe 
+        tag_unwarpped = cv.warpPerspective(key_frame, H_tag, (ref_x_points, ref_y_points))
+        tag_unwarpped_grayscale = cv.cvtColor(tag_unwarpped, cv.COLOR_BGR2GRAY)
+        _, tag_unwarpped_threshold = cv.threshold(tag_unwarpped_grayscale, 200, 255, cv.THRESH_BINARY)
+        # ==================================================================================================================================================== #
+        # Computing the orientation the tag using thresholded unwarpped tag image
+        orientationID = getOrientation(tag_unwarpped_threshold)
+        font = cv.FONT_HERSHEY_SIMPLEX
+        cv.putText(key_frame, orientationID, (150,150), font, 4, (0, 0, 225), 2, cv.LINE_AA)
+        # ==================================================================================================================================================== #
+        # Using the orientation information obtained above lets recalculate the H and inv_H matrices 
+        H_image, inv_H_image = getHMatrix(orientationID, img_x, img_y)                
+        # ==================================================================================================================================================== #
+        # Preparing the image and projecting into the tag using the recalculated Homography matrix
+        warpped_image = cv.warpPerspective(img, inv_H_image, (cols, rows))
+        warpped_image_grayscale = cv.cvtColor(warpped_image, cv.COLOR_BGR2GRAY)
+        # ==================================================================================================================================================== #
+        # Creating Mask and merging the key frame with the warpped Image using bitwise_and and add opencv functions
+        _, warpped_image_threshold = cv.threshold(warpped_image_grayscale, 0, 250, cv.THRESH_BINARY_INV)
+        kf_slotted = cv.bitwise_and(kf_original, kf_original, mask=warpped_image_threshold)
+        result = cv.add(kf_slotted, warpped_image)
+        # ================================================================================================================================================================ #
+        # Display the Original Keyframe and Final Result 
+        cv.imshow("Original Key Frame", kf_original)
+        cv.imshow("Result", result)
     key = cv.waitKey(1)
     if key == 27:
         break
