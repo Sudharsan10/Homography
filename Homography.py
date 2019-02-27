@@ -203,8 +203,6 @@ while True:
     kf_grayscale = cv.cvtColor(key_frame, cv.COLOR_BGR2GRAY)
     _, kf_threshold = cv.threshold(kf_grayscale, 200, 255, 0)
     _, contours, heirarchy = cv.findContours(kf_threshold, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv.contourArea, reverse=True)[2:5]
-    
     # ================================================================================================================================================================ #
     # shortlisting Contour candidates with area approximately equal to the Tag area among the multiple cntours detected.
     # ================================================================================================================================================================ #
@@ -257,6 +255,7 @@ while True:
                 R_mat, t, K_mat = getKRTMatrix(H_image, inv_H_image)
                 threeDimPoints, jacobian = cv.projectPoints(threeDimAxis,R_mat,t,K_mat,np.zeros((1,4)))
                 threeDframe = draw3D(key_frame, threeDimPoints)
+    
     # ================================================================================================================================================================ #
     # Display the Original Keyframe and Final Result
     cv.imshow("Original Key Frame", kf_original)
