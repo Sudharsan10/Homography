@@ -19,8 +19,8 @@ import sys
 # ==================================================================================================================================================================== #
 # Import Video files and required Image
 # ==================================================================================================================================================================== #
-tag = cv.VideoCapture('Input Sequences/Tag0.mp4')           # Enter the file location Address of the video file
-img = cv.imread('Reference Images/Lena.png')                # Enter the template image file location address. 
+tag = cv.VideoCapture('Input Sequences/Tag0.mp4')
+img = cv.imread('Reference Images/Lena.png')
 img_grayscale = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 (img_x, img_y, ch) = img.shape
 ref_x_points, ref_y_points = 400, 400
@@ -129,6 +129,8 @@ def getOrientation(input_image):
 # ======================================================================================================================================================================= #
 # Function Definitions:  get the tag ID
 # ======================================================================================================================================================================= #
+
+
 def getTagId(input_image, orientationID):
     id = ''
     if orientationID == 'tL':
@@ -171,12 +173,14 @@ def getKRTMatrix(H, inv_H):
     r2 = scalar*b2
     r3 = (r3 * scalar * scalar).reshape(3, 1)
     R_mat = np.concatenate((r1, r2, r3), axis=1)
+
     return R_mat, t, K_mat
 
 # ======================================================================================================================================================================= #
 # Function Definitions:  Draw the 3D structure, having the borders of a cuboid
 # ======================================================================================================================================================================= #
 def draw3D(frame, threeDimPoints):
+
     threeDimPoints = np.int32(threeDimPoints).reshape(-1, 2)
     frame = cv.drawContours(frame, [threeDimPoints[:4]], -1, (0, 255, 0), 3)   # Ground plane
     for i, j in zip(range(4), range(4, 8)):                                    # Z Axis planes
