@@ -16,7 +16,16 @@ import copy
 import time
 import sys
 
-# ======================================================================================================================================================================= #
+# ==================================================================================================================================================================== #
+# Import Video files and required Image
+# ==================================================================================================================================================================== #
+tag = cv.VideoCapture('Data/multipleTags.mp4')
+img = cv.imread('Data/Lena.png')
+img_grayscale = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+(img_x, img_y, ch) = img.shape
+ref_x_points, ref_y_points = 400, 400
+
+threeDimAxis = np.float32([[0, 0, 0], [0, 500, 0], [500, 500, 0], [500, 0, 0], [0, 0, -300], [0, 500, -300], [500, 500, -300], [500, 0, -300]])  # Change these values to
 # Function Definitions:  Calculating the H matrix
 # ======================================================================================================================================================================= #
 def getHMatrix(orientation, camera_x, camera_y):
@@ -179,16 +188,7 @@ def draw3D(frame, threeDimPoints):
     frame = cv.drawContours(frame, [threeDimPoints[4:]], -1, (255, 0, 0), 3)   # Top plane
     return frame
 
-# ==================================================================================================================================================================== #
-# Import Video files and required Image
-# ==================================================================================================================================================================== #
-tag = cv.VideoCapture('Data/Tag2.mp4')
-img = cv.imread('Data/Lena.png')
-img_grayscale = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-(img_x, img_y, ch) = img.shape
-ref_x_points, ref_y_points = 400, 400
-tag_id_found = False
-threeDimAxis = np.float32([[0, 0, 0], [0, 500, 0], [500, 500, 0], [500, 0, 0], [0, 0, -300], [0, 500, -300], [500, 500, -300], [500, 0, -300]])  # Change these values to
+# ======================================================================================================================================================================= #
 # change the scaling of the 3D structure
 while True:
     # Reading each key frame ( kf_ ) from the video
@@ -209,12 +209,11 @@ while True:
     # ================================================================================================================================================================ #
     # To keep track of contour with maximum area
     max_area_contour = np.zeros((1, 1, 2), dtype=int)
-
     for contour in contours:
         peri = cv.arcLength(contour, True)
         approx = cv.approxPolyDP(contour, 0.01 * peri, True)
         area = cv.contourArea(contour)
-        if area > 2000 and area < 22000 and area > cv.contourArea(max_area_contour):
+        if area > 2000 and area < 22600:
             max_area_contour = contour
             if len(approx) == 4:                            # Filtering Contours with 4 corners
                 # Draw the selected Contour matching the criteria fixed
@@ -234,9 +233,8 @@ while True:
                 # ==================================================================================================================================================== #
                 # Computing the tag ID of the thresholded unwarpped tag image (This is done only once)
                 # ==================================================================================================================================================== #
-                if tag_id_found == False:
-                    tag_id = getTagId(tag_unwarpped_threshold, orientationID)
-                    tag_id_found = True
+                
+                tag_id = getTagId(tag_unwarpped_threshold, orientationID)
                 tx1, ty1 = approx[0][0][0], approx[0][0][1]
                 cv.putText(kf_original, "Tag ID: " + tag_id, (tx1-50, ty1-50), font, 1, (0, 0, 225), 2, cv.LINE_AA)
                 # ==================================================================================================================================================== #
