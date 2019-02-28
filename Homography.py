@@ -265,8 +265,6 @@ while True:
     key = cv.waitKey(1)
     if key == 27:
         break
-    else:
-        print("No more frame to read! Exiting..!")
-
+    
 tag.release()
 cv.destroyAllWindows()
